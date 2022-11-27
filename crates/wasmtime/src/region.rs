@@ -4,7 +4,6 @@ use std::collections::HashSet;
 use std::convert::TryInto;
 use std::marker;
 use std::mem;
-use wasmtime::Trap;
 
 // This is a pretty naive way to account for borrows. This datastructure
 // could be made a lot more efficient with some effort.
@@ -25,8 +24,8 @@ pub struct BorrowChecker<'a> {
 unsafe impl Send for BorrowChecker<'_> {}
 unsafe impl Sync for BorrowChecker<'_> {}
 
-fn to_trap(err: impl std::error::Error + Send + Sync + 'static) -> Trap {
-    Trap::from(Box::new(err) as Box<dyn std::error::Error + Send + Sync>)
+fn to_trap(err: impl std::error::Error + Send + Sync + 'static) -> anyhow::Error {
+    anyhow::anyhow!(Box::new(err) as Box<dyn std::error::Error + Send + Sync>)
 }
 
 impl<'a> BorrowChecker<'a> {
@@ -40,7 +39,7 @@ impl<'a> BorrowChecker<'a> {
         }
     }
 
-    pub fn slice<T: AllBytesValid>(&mut self, ptr: i32, len: i32) -> Result<&'a [T], Trap> {
+    pub fn slice<T: AllBytesValid>(&mut self, ptr: i32, len: i32) -> anyhow::Result<&'a [T]> {
         let (ret, r) = self.get_slice(ptr, len)?;
         // SAFETY: We're promoting the valid lifetime of `ret` from a temporary
         // borrow on `self` to `'a` on this `BorrowChecker`. At the same time
@@ -52,7 +51,11 @@ impl<'a> BorrowChecker<'a> {
         Ok(ret)
     }
 
-    pub fn slice_mut<T: AllBytesValid>(&mut self, ptr: i32, len: i32) -> Result<&'a mut [T], Trap> {
+    pub fn slice_mut<T: AllBytesValid>(
+        &mut self,
+        ptr: i32,
+        len: i32,
+    ) -> anyhow::Result<&'a mut [T]> {
         let (ret, r) = self.get_slice_mut(ptr, len)?;
         // SAFETY: see `slice` for how we're extending the lifetime by
         // recording the borrow here. Note that the `mut_borrows` list is
@@ -63,7 +66,7 @@ impl<'a> BorrowChecker<'a> {
         Ok(ret)
     }
 
-    fn get_slice<T: AllBytesValid>(&self, ptr: i32, len: i32) -> Result<(&[T], Region), Trap> {
+    fn get_slice<T: AllBytesValid>(&self, ptr: i32, len: i32) -> anyhow::Result<(&[T], Region)> {
         let r = self.region::<T>(ptr, len)?;
         if self.is_mut_borrowed(r) {
             Err(to_trap(GuestError::PtrBorrowed(r)))
@@ -92,7 +95,7 @@ impl<'a> BorrowChecker<'a> {
         }
     }
 
-    fn get_slice_mut<T>(&mut self, ptr: i32, len: i32) -> Result<(&mut [T], Region), Trap> {
+    fn get_slice_mut<T>(&mut self, ptr: i32, len: i32) -> anyhow::Result<(&mut [T], Region)> {
         let r = self.region::<T>(ptr, len)?;
         if self.is_mut_borrowed(r) || self.is_shared_borrowed(r) {
             Err(to_trap(GuestError::PtrBorrowed(r)))
@@ -111,7 +114,7 @@ impl<'a> BorrowChecker<'a> {
         }
     }
 
-    fn region<T>(&self, ptr: i32, len: i32) -> Result<Region, Trap> {
+    fn region<T>(&self, ptr: i32, len: i32) -> anyhow::Result<Region> {
         assert_eq!(std::mem::align_of::<T>(), 1);
         let r = Region {
             start: ptr as u32,
@@ -123,12 +126,12 @@ impl<'a> BorrowChecker<'a> {
         Ok(r)
     }
 
-    pub fn slice_str(&mut self, ptr: i32, len: i32) -> Result<&'a str, Trap> {
+    pub fn slice_str(&mut self, ptr: i32, len: i32) -> anyhow::Result<&'a str> {
         let bytes = self.slice(ptr, len)?;
         std::str::from_utf8(bytes).map_err(to_trap)
     }
 
-    fn validate_contains(&self, region: &Region) -> Result<(), Trap> {
+    fn validate_contains(&self, region: &Region) -> anyhow::Result<()> {
         let end = region
             .start
             .checked_add(region.len)
@@ -154,13 +157,13 @@ impl<'a> BorrowChecker<'a> {
 }
 
 impl RawMem for BorrowChecker<'_> {
-    fn store<T: Endian>(&mut self, offset: i32, val: T) -> Result<(), Trap> {
+    fn store<T: Endian>(&mut self, offset: i32, val: T) -> anyhow::Result<()> {
         let (slice, _) = self.get_slice_mut::<Le<T>>(offset, 1)?;
         slice[0].set(val);
         Ok(())
     }
 
-    fn store_many<T: Endian>(&mut self, offset: i32, val: &[T]) -> Result<(), Trap> {
+    fn store_many<T: Endian>(&mut self, offset: i32, val: &[T]) -> anyhow::Result<()> {
         let (slice, _) = self.get_slice_mut::<Le<T>>(
             offset,
             val.len()
@@ -173,7 +176,7 @@ impl RawMem for BorrowChecker<'_> {
         Ok(())
     }
 
-    fn load<T: Endian>(&self, offset: i32) -> Result<T, Trap> {
+    fn load<T: Endian>(&self, offset: i32) -> anyhow::Result<T> {
         let (slice, _) = self.get_slice::<Le<T>>(offset, 1)?;
         Ok(slice[0].get())
     }

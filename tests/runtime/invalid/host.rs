@@ -2,7 +2,6 @@ wit_bindgen_wasmtime::export!("../../tests/runtime/invalid/imports.wit");
 
 use anyhow::Result;
 use imports::*;
-use wasmtime::Trap;
 
 #[derive(Default)]
 pub struct MyImports;
@@ -89,10 +88,10 @@ fn run(wasm: &str) -> Result<()> {
     )?;
     return Ok(());
 
-    fn assert_err(result: Result<(), Trap>, err: &str) -> Result<()> {
+    fn assert_err(result: anyhow::Result<()>, err: &str) -> anyhow::Result<()> {
         match result {
             Ok(()) => anyhow::bail!("export didn't trap"),
-            Err(e) if e.to_string().contains(err) => Ok(()),
+            Err(e) if e.root_cause().to_string().contains(err) => Ok(()),
             Err(e) => Err(e.into()),
         }
     }
