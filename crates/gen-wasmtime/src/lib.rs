@@ -692,9 +692,9 @@ impl Generator for Wasmtime {
         sig.async_ = is_async;
         sig.self_arg = Some("&self, mut caller: impl wasmtime::AsContextMut<Data = T>".to_string());
         self.print_docs_and_params(iface, func, TypeMode::AllBorrowed("'_"), &sig);
-        self.push_str("-> Result<");
+        self.push_str("-> anyhow::Result<");
         self.print_ty(iface, &func.result, TypeMode::Owned);
-        self.push_str(", wasmtime::Trap> {\n");
+        self.push_str("> {\n");
 
         let params = func
             .params
@@ -820,12 +820,12 @@ impl Generator for Wasmtime {
                 self.src.push_str("type Error;\n");
                 if self.needs_custom_error_to_trap {
                     self.src.push_str(
-                        "fn error_to_trap(&mut self, err: Self::Error) -> wasmtime::Trap;\n",
+                        "fn error_to_trap(&mut self, err: Self::Error) -> anyhow::Error;\n",
                     );
                 }
                 for ty in self.needs_custom_error_to_types.iter() {
                     self.src.push_str(&format!(
-                        "fn error_to_{}(&mut self, err: Self::Error) -> Result<{}, wasmtime::Trap>;\n",
+                        "fn error_to_{}(&mut self, err: Self::Error) -> anyhow::Result<{}>;\n",
                         ty.to_snake_case(),
                         ty.to_camel_case(),
                     ));
@@ -919,7 +919,7 @@ impl Generator for Wasmtime {
                                 .{snake}_table
                                 .remove(handle)
                                 .map_err(|e| {{
-                                    wasmtime::Trap::new(format!(\"failed to remove handle: {{}}\", e))
+                                    anyhow::anyhow!(\"failed to remove handle: {{}}\", e)
                                 }})?;
                             host.drop_{snake}(handle);
                             Ok(())
@@ -1181,7 +1181,7 @@ impl Generator for Wasmtime {
                             &self,
                             mut store: impl wasmtime::AsContextMut<Data = T>,
                             val: {name_camel},
-                        ) -> Result<(), wasmtime::Trap> {{
+                        ) -> anyhow::Result<()> {{
                             let mut store = store.as_context_mut();
                             let data = (self.get_state)(store.data_mut());
                             let wasm = match data.resource_slab{idx}.drop(val.0) {{
@@ -1543,7 +1543,7 @@ impl Bindgen for FunctionBindgen<'_> {
                 let name = &iface.resources[*ty].name;
                 results.push(format!(
                     "_tables.{}_table.get(({}) as u32).ok_or_else(|| {{
-                            wasmtime::Trap::new(\"invalid handle index\")
+                            anyhow::anyhow!(\"invalid handle index\")
                         }})?",
                     name.to_snake_case(),
                     operands[0]
@@ -1920,7 +1920,7 @@ impl Bindgen for FunctionBindgen<'_> {
                     );
                     results.push(format!(
                         "String::from_utf8(data{})
-                            .map_err(|_| wasmtime::Trap::new(\"invalid utf-8\"))?",
+                            .map_err(|_| anyhow::anyhow!(\"invalid utf-8\"))?",
                         tmp,
                     ));
                 }
