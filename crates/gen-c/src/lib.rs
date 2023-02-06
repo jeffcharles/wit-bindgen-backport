@@ -432,6 +432,8 @@ impl C {
                 size_t size,
                 size_t align
             ) {
+                if (size == 0)
+                    return;
                 free(ptr);
             }
         ");
