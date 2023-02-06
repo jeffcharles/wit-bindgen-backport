@@ -415,9 +415,11 @@ impl C {
             void *canonical_abi_realloc(
                 void *ptr,
                 size_t orig_size,
-                size_t org_align,
+                size_t align,
                 size_t new_size
             ) {
+                if (new_size == 0)
+                    return (void*) align;
                 void *ret = realloc(ptr, new_size);
                 if (!ret)
                     abort();
