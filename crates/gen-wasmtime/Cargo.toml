@@ -19,6 +19,6 @@ anyhow = "1.0"
 test-helpers = { path = '../test-helpers', features = [
     'wit-bindgen-gen-wasmtime',
 ] }
-wasmtime-wasi = "13.0.0"
-wasmtime = "13.0.0"
+wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", branch = "main" }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", branch = "main" }
 wit-bindgen-wasmtime = { path = '../wasmtime', features = ['tracing', 'async'] }
